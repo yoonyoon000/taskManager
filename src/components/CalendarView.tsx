@@ -1,13 +1,13 @@
 import type { DragEvent } from 'react';
 import {
   WEEKDAY_LABELS,
-  formatShortDate,
   getMonthDaysGrid,
   isSameMonth,
   isToday,
   shiftMonth,
   toDateKey,
 } from '../utils/date';
+import IconButton from './IconButton';
 
 export interface CalendarEntry {
   id: string;
@@ -58,22 +58,15 @@ function CalendarView({
   };
 
   return (
-    <section className="card calendar-card">
-      <div className="calendar-header">
+    <section className="calendar-panel">
+      <div className="calendar-topbar">
         <div>
-          <p className="eyebrow">달력 보기</p>
-          <h2>{monthLabel}</h2>
+          <strong>{monthLabel}</strong>
         </div>
-        <div className="calendar-nav">
-          <button type="button" className="button ghost small" onClick={() => onMonthChange(shiftMonth(month, -1))}>
-            이전
-          </button>
-          <button type="button" className="button ghost small" onClick={() => onMonthChange(new Date())}>
-            오늘
-          </button>
-          <button type="button" className="button ghost small" onClick={() => onMonthChange(shiftMonth(month, 1))}>
-            다음
-          </button>
+        <div className="calendar-controls">
+          <IconButton icon="chevron_left" label="이전 달" onClick={() => onMonthChange(shiftMonth(month, -1))} />
+          <IconButton icon="today" label="이번 달" onClick={() => onMonthChange(new Date())} />
+          <IconButton icon="chevron_right" label="다음 달" onClick={() => onMonthChange(shiftMonth(month, 1))} />
         </div>
       </div>
 
@@ -108,12 +101,11 @@ function CalendarView({
               onDragOver={onDropEntry ? (event) => event.preventDefault() : undefined}
               onDrop={onDropEntry ? (event) => handleDrop(event, dateKey) : undefined}
             >
-              <div className="calendar-day-top">
+              <div className="calendar-day-head">
                 <span>{day.getDate()}</span>
-                <span className="calendar-day-label">{formatShortDate(dateKey)}</span>
               </div>
               <div className="calendar-entry-list">
-                {entries.slice(0, 3).map((entry) => (
+                {entries.slice(0, 4).map((entry) => (
                   <div
                     key={entry.id}
                     className={entry.tone ? `calendar-entry is-${entry.tone}` : 'calendar-entry'}
@@ -127,7 +119,7 @@ function CalendarView({
                     {entry.label}
                   </div>
                 ))}
-                {entries.length > 3 ? <span className="calendar-more">+{entries.length - 3}개 더</span> : null}
+                {entries.length > 4 ? <span className="calendar-more">+{entries.length - 4}</span> : null}
               </div>
             </button>
           );

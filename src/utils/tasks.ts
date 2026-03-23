@@ -1,6 +1,20 @@
-import { Subject, TaskChecklistStageDraft, TaskFormValues, TaskPlan, TaskStatusFilter } from '../types/task';
+import {
+  Subject,
+  SubjectCategory,
+  TaskBriefAnalysis,
+  TaskClarification,
+  TaskChecklistStageDraft,
+  TaskFormValues,
+  TaskPlan,
+  TaskScopeFilter,
+  TaskStatusFilter,
+} from '../types/task';
 import { formatDaysLeftLabel, getDaysLeft } from './date';
 import { buildScheduledStages } from './schedule';
+
+function normalizeChecklistLabel(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
 
 export function flattenTaskItems(task: TaskPlan) {
   return task.stages.flatMap((stage) =>
@@ -12,6 +26,7 @@ export function flattenTaskItems(task: TaskPlan) {
       taskTitle: task.title,
       subjectId: task.subjectId,
       subjectName: task.subjectName,
+      subjectCategory: task.subjectCategory,
     })),
   );
 }
@@ -56,8 +71,13 @@ export function getTaskStatusLabel(task: TaskPlan) {
   return '진행 중';
 }
 
-export function matchesTaskFilter(task: TaskPlan, subjectId: string, status: TaskStatusFilter) {
-  if (subjectId !== 'all' && task.subjectId !== subjectId) {
+export function matchesTaskScope(task: TaskPlan, scope: TaskScopeFilter, status: TaskStatusFilter) {
+  const categoryMatches =
+    scope === 'all' ||
+    (scope === 'general' && task.subjectCategory === '교양') ||
+    (scope === 'major' && task.subjectCategory === '전공');
+
+  if (!categoryMatches) {
     return false;
   }
 
@@ -71,6 +91,9 @@ export function matchesTaskFilter(task: TaskPlan, subjectId: string, status: Tas
 export function buildTaskPlan(params: {
   subject: Subject;
   formValues: TaskFormValues;
+  analysis: TaskBriefAnalysis;
+  questions: string[];
+  clarifications?: TaskClarification[];
   stageDrafts: TaskChecklistStageDraft[];
   analysisSource: TaskPlan['analysisSource'];
   analysisError?: string;
@@ -81,6 +104,7 @@ export function buildTaskPlan(params: {
     id: crypto.randomUUID(),
     subjectId: params.subject.id,
     subjectName: params.subject.name,
+    subjectCategory: params.subject.category,
     title: params.formValues.title.trim(),
     description: params.formValues.description.trim(),
     dueDate: params.formValues.dueDate,
@@ -88,8 +112,94 @@ export function buildTaskPlan(params: {
     createdAt: now,
     updatedAt: now,
     stages: buildScheduledStages(params.formValues.dueDate, params.stageDrafts),
+    analysis: params.analysis,
+    questions: params.questions,
+    clarifications: params.clarifications ?? [],
     analysisSource: params.analysisSource,
     analysisError: params.analysisError,
+  };
+}
+
+export function refreshTaskChecklist(task: TaskPlan, params: {
+  stageDrafts: TaskChecklistStageDraft[];
+  analysis: TaskBriefAnalysis;
+  questions: string[];
+  clarifications: TaskClarification[];
+  analysisSource: TaskPlan['analysisSource'];
+  analysisError?: string;
+}) {
+  const existingItems = flattenTaskItems(task);
+  const existingByTitle = new Map(
+    existingItems.map((item) => [normalizeChecklistLabel(item.title), item]),
+  );
+
+  const stages = buildScheduledStages(task.dueDate, params.stageDrafts).map((stage) => ({
+    ...stage,
+    items: stage.items.map((item) => {
+      const existing = existingByTitle.get(normalizeChecklistLabel(item.title));
+
+      if (!existing) {
+        return item;
+      }
+
+      return {
+        ...item,
+        completed: existing.completed,
+        dueDate: existing.dueDate,
+      };
+    }),
+  }));
+
+  return {
+    ...task,
+    updatedAt: new Date().toISOString(),
+    stages,
+    analysis: params.analysis,
+    questions: params.questions,
+    clarifications: params.clarifications,
+    analysisSource: params.analysisSource,
+    analysisError: params.analysisError,
+  };
+}
+
+export function sortTasks(tasks: TaskPlan[]) {
+  return [...tasks].sort((first, second) => {
+    const firstWeight = { urgent: 0, active: 1, completed: 2 }[getTaskStatus(first)];
+    const secondWeight = { urgent: 0, active: 1, completed: 2 }[getTaskStatus(second)];
+
+    if (firstWeight !== secondWeight) {
+      return firstWeight - secondWeight;
+    }
+
+    return new Date(first.dueDate).getTime() - new Date(second.dueDate).getTime();
+  });
+}
+
+export function createSubjectRecord(values: {
+  name: string;
+  category: SubjectCategory;
+  description: string;
+}) {
+  const now = new Date().toISOString();
+
+  return {
+    id: crypto.randomUUID(),
+    name: values.name.trim(),
+    category: values.category,
+    description: values.description.trim(),
+    createdAt: now,
+    updatedAt: now,
+  } as Subject;
+}
+
+export function updateTaskMeta(
+  task: TaskPlan,
+  patch: Partial<Pick<TaskPlan, 'title' | 'description' | 'dueDate'>>,
+) {
+  return {
+    ...task,
+    ...patch,
+    updatedAt: new Date().toISOString(),
   };
 }
 

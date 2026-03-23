@@ -1,46 +1,41 @@
 import type { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import Sidebar from './Sidebar';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
-  { to: '/', label: '대시보드' },
-  { to: '/subjects', label: '과목 관리' },
-  { to: '/tasks/new', label: '과제 생성' },
-];
+function getHeaderTitle(pathname: string) {
+  if (pathname === '/calendar') {
+    return '달력 보기';
+  }
+
+  return '전체 과제';
+}
 
 function Layout({ children }: LayoutProps) {
   const location = useLocation();
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-wrap">
-          <Link to="/" className="brand">
-            과제 관리 도우미
-          </Link>
-          <p className="brand-description">과목과 과제를 달력과 체크리스트로 함께 관리하는 웹앱</p>
-        </div>
-        <Link to="/tasks/new" className="button primary small">
-          체크리스트 만들기
-        </Link>
-      </header>
-      <div className="subnav">
-        <nav className="topnav" aria-label="주요 메뉴">
-          {navItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={location.pathname === item.to ? 'nav-link is-active' : 'nav-link'}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+    <div className="shell">
+      <aside className="shell-sidebar">
+        <Sidebar />
+      </aside>
+      <div className="shell-main">
+        <header className="shell-header">
+          <div className="header-brand">
+            <span className="material-symbols-outlined header-brand-icon" aria-hidden>
+              dashboard
+            </span>
+            <div>
+              <strong>과제 관리 도우미</strong>
+              <p>{getHeaderTitle(location.pathname)}</p>
+            </div>
+          </div>
+        </header>
+        <main className="shell-content">{children}</main>
       </div>
-      <main className="page-shell">{children}</main>
     </div>
   );
 }

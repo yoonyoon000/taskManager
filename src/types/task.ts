@@ -1,30 +1,27 @@
-export type SubjectClassStyle =
-  | '발표 중심'
-  | '결과물 중심'
-  | '리서치 중심'
-  | '혼합형';
+export type SubjectCategory = '교양' | '전공';
 
 export type AnalysisSource = 'api' | 'mock' | 'fallback';
 
 export interface Subject {
   id: string;
   name: string;
+  category: SubjectCategory;
   description: string;
-  focusNote: string;
-  classStyle: SubjectClassStyle;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface SubjectFormValues {
+export interface SubjectEditValues {
   name: string;
+  category: SubjectCategory;
   description: string;
-  focusNote: string;
-  classStyle: SubjectClassStyle;
 }
 
 export interface TaskFormValues {
-  subjectId: string;
+  subjectId?: string;
+  subjectName: string;
+  subjectCategory: SubjectCategory;
+  subjectDescription: string;
   title: string;
   description: string;
   dueDate: string;
@@ -46,6 +43,20 @@ export interface TaskChecklistStageDraft {
   checklist: string[];
 }
 
+export interface TaskBriefAnalysis {
+  assignmentType: string;
+  finalOutput: string;
+  needsResearch: boolean;
+  needsPresentation: boolean;
+  needsIteration: boolean;
+  reasoningSummary: string;
+}
+
+export interface TaskClarification {
+  question: string;
+  answer: string;
+}
+
 export interface TaskChecklistStage {
   id: string;
   title: string;
@@ -57,6 +68,7 @@ export interface TaskPlan {
   id: string;
   subjectId: string;
   subjectName: string;
+  subjectCategory: SubjectCategory;
   title: string;
   description: string;
   dueDate: string;
@@ -64,12 +76,19 @@ export interface TaskPlan {
   createdAt: string;
   updatedAt: string;
   stages: TaskChecklistStage[];
+  analysis?: TaskBriefAnalysis;
+  questions?: string[];
+  clarifications?: TaskClarification[];
   analysisSource?: AnalysisSource;
   analysisError?: string;
 }
 
 export interface TaskAnalysisResult {
+  analysis: TaskBriefAnalysis;
+  questions: string[];
   stages: TaskChecklistStageDraft[];
 }
 
 export type TaskStatusFilter = 'all' | 'active' | 'completed' | 'urgent';
+
+export type TaskScopeFilter = 'all' | 'general' | 'major';

@@ -1,7 +1,11 @@
-import { Subject, TaskPlan } from '../types/task';
+import { Subject, SubjectCategory, TaskPlan } from '../types/task';
 
 const SUBJECTS_KEY = 'assignment-dashboard/subjects';
 const TASKS_KEY = 'assignment-dashboard/tasks';
+
+function normalizeCategory(value: string | undefined): SubjectCategory {
+  return value === '교양' ? '교양' : '전공';
+}
 
 function readStorage<T>(key: string) {
   if (typeof window === 'undefined') {
@@ -21,11 +25,22 @@ function writeStorage<T>(key: string, value: T[]) {
 }
 
 export function getSubjects() {
-  return readStorage<Subject>(SUBJECTS_KEY);
+  return readStorage<Subject & { category?: string }>(SUBJECTS_KEY).map((subject) => ({
+    ...subject,
+    category: normalizeCategory(subject.category),
+    description: subject.description ?? '',
+    createdAt: subject.createdAt ?? new Date().toISOString(),
+    updatedAt: subject.updatedAt ?? new Date().toISOString(),
+  }));
 }
 
 export function getSubjectById(subjectId: string) {
   return getSubjects().find((subject) => subject.id === subjectId);
+}
+
+export function findSubjectByName(name: string) {
+  const normalized = name.trim().toLowerCase();
+  return getSubjects().find((subject) => subject.name.trim().toLowerCase() === normalized);
 }
 
 export function saveSubject(subject: Subject) {
@@ -39,6 +54,18 @@ export function saveSubject(subject: Subject) {
   }
 
   writeStorage(SUBJECTS_KEY, subjects);
+
+  const tasks = getTasks().map((task) =>
+    task.subjectId === subject.id
+      ? {
+          ...task,
+          subjectName: subject.name,
+          subjectCategory: subject.category,
+          updatedAt: new Date().toISOString(),
+        }
+      : task,
+  );
+  writeStorage(TASKS_KEY, tasks);
 }
 
 export function deleteSubject(subjectId: string) {
@@ -49,7 +76,10 @@ export function deleteSubject(subjectId: string) {
 }
 
 export function getTasks() {
-  return readStorage<TaskPlan>(TASKS_KEY);
+  return readStorage<TaskPlan & { subjectCategory?: string }>(TASKS_KEY).map((task) => ({
+    ...task,
+    subjectCategory: normalizeCategory(task.subjectCategory),
+  }));
 }
 
 export function getTaskById(taskId: string) {
