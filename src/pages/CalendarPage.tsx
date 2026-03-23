@@ -1,17 +1,13 @@
 import { useMemo, useState } from 'react';
 import CalendarView, { type CalendarEntry } from '../components/CalendarView';
+import { useTasks } from '../contexts/TaskContext';
 import { formatShortDate, getTodayString } from '../utils/date';
-import { getTasks, saveTask } from '../utils/storage';
-import { sortTasks, updateTaskItem } from '../utils/tasks';
+import { sortTasks } from '../utils/tasks';
 
 function CalendarPage() {
-  const [tasks, setTasks] = useState(() => getTasks());
+  const { tasks, loading, errorMessage, toggleTaskItem, updateTaskItemValue } = useTasks();
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [month, setMonth] = useState(() => new Date());
-
-  const refreshTasks = () => {
-    setTasks(getTasks());
-  };
 
   const sortedTasks = useMemo(() => sortTasks(tasks), [tasks]);
 
@@ -21,7 +17,7 @@ function CalendarPage() {
         ...(acc[task.dueDate] ?? []),
         {
           id: `${task.id}-deadline`,
-          label: `${task.title} 마감`,
+          label: `${task.subjectName} · ${task.title} 마감`,
           tone: 'deadline',
         },
       ];
@@ -32,7 +28,7 @@ function CalendarPage() {
             ...(acc[item.dueDate] ?? []),
             {
               id: `${task.id}-${item.id}`,
-              label: `${item.title}`,
+              label: `${task.title} · ${item.title}`,
               tone: item.completed ? 'complete' : 'checklist',
               draggableId: `${task.id}::${item.id}`,
             },
@@ -68,37 +64,18 @@ function CalendarPage() {
   );
 
   const handleToggleItem = (taskId: string, itemId: string) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      return;
-    }
-
-    saveTask(
-      updateTaskItem(task, itemId, (item) => ({
-        ...item,
-        completed: !item.completed,
-      })),
-    );
-    refreshTasks();
+    void toggleTaskItem(taskId, itemId);
   };
 
   const handleDropEntry = (entryId: string, dateKey: string) => {
     const [taskId, itemId] = entryId.split('::');
-    const task = tasks.find((current) => current.id === taskId);
 
-    if (!task || !itemId) {
+    if (!itemId) {
       return;
     }
 
-    saveTask(
-      updateTaskItem(task, itemId, (item) => ({
-        ...item,
-        dueDate: dateKey,
-      })),
-    );
+    void updateTaskItemValue(taskId, itemId, { dueDate: dateKey });
     setSelectedDate(dateKey);
-    refreshTasks();
   };
 
   return (
@@ -107,6 +84,7 @@ function CalendarPage() {
         <strong>달력 보기</strong>
         <span>{formatShortDate(selectedDate)}</span>
       </div>
+      {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
 
       <div className="calendar-page-layout">
         <CalendarView
@@ -120,7 +98,9 @@ function CalendarPage() {
         <section className="calendar-agenda">
           <div className="calendar-agenda-head">
             <strong>{formatShortDate(selectedDate)}</strong>
-            <span>{selectedItems.length + selectedDeadlines.length}개 일정</span>
+            <span>
+              {loading ? '불러오는 중...' : `${selectedItems.length + selectedDeadlines.length}개 일정`}
+            </span>
           </div>
           <div className="calendar-agenda-list">
             {selectedDeadlines.map((task) => (
@@ -137,7 +117,10 @@ function CalendarPage() {
               </div>
             ))}
             {selectedItems.map((item) => (
-              <label key={`${item.taskId}-${item.id}`} className={item.completed ? 'agenda-item is-complete' : 'agenda-item'}>
+              <label
+                key={`${item.taskId}-${item.id}`}
+                className={item.completed ? 'agenda-item is-complete' : 'agenda-item'}
+              >
                 <input
                   type="checkbox"
                   checked={item.completed}
@@ -151,7 +134,9 @@ function CalendarPage() {
                 </div>
               </label>
             ))}
-            {selectedItems.length === 0 ? <p className="calendar-empty">선택한 날짜 일정이 없습니다.</p> : null}
+            {!loading && selectedItems.length === 0 && selectedDeadlines.length === 0 ? (
+              <p className="calendar-empty">선택한 날짜 일정이 없습니다.</p>
+            ) : null}
           </div>
         </section>
       </div>

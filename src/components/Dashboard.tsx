@@ -1,29 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  Subject,
-  SubjectEditValues,
-  TaskClarification,
-  TaskFormValues,
-  TaskScopeFilter,
-  TaskStatusFilter,
-} from '../types/task';
+import { Subject, SubjectEditValues, TaskStatusFilter, type TaskClarification, type TaskFormValues, type TaskScopeFilter } from '../types/task';
 import { getDaysLeft, getTodayString, parseDateString } from '../utils/date';
-import { deleteTask, findSubjectByName, getSubjects, getTasks, saveSubject, saveTask } from '../utils/storage';
-import {
-  addChecklistItem,
-  buildTaskPlan,
-  calculateTaskProgress,
-  createSubjectRecord,
-  refreshTaskChecklist,
-  getTaskStatus,
-  matchesTaskScope,
-  removeChecklistItem,
-  sortTasks,
-  updateTaskItem,
-  updateTaskMeta,
-} from '../utils/tasks';
-import { requestTaskChecklist } from '../services/taskAnalysis';
+import { calculateTaskProgress, getTaskStatus, sortTasks } from '../utils/tasks';
+import { useTasks } from '../contexts/TaskContext';
 import QuickAddTask from './QuickAddTask';
 import SubjectEditPanel from './SubjectEditPanel';
 import TaskCard from './TaskCard';
@@ -41,21 +21,34 @@ function getScopeFilter(value: string | null): TaskScopeFilter {
 }
 
 function Dashboard() {
+  const { tasks, subjects, loading, errorMessage, createTask, toggleTaskItem, updateTaskItemValue, addTaskItem, removeTaskItem, deleteTask, updateTask, refineTask, updateSubject } =
+    useTasks();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [subjects, setSubjects] = useState(() => getSubjects());
-  const [tasks, setTasks] = useState(() => getTasks());
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('all');
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
+  const [subjectEditValues, setSubjectEditValues] = useState<SubjectEditValues>({
+    name: '',
+    category: '전공',
+    description: '',
+  });
   const scope = getScopeFilter(searchParams.get('scope'));
 
-  const refreshBoard = () => {
-    setSubjects(getSubjects());
-    setTasks(getTasks());
-  };
-
   const scopedTasks = useMemo(
-    () => sortTasks(tasks.filter((task) => matchesTaskScope(task, scope, 'all'))),
+    () =>
+      sortTasks(
+        tasks.filter((task) => {
+          if (scope === 'general') {
+            return task.subjectCategory === '교양';
+          }
+
+          if (scope === 'major') {
+            return task.subjectCategory === '전공';
+          }
+
+          return true;
+        }),
+      ),
     [scope, tasks],
   );
 
@@ -74,8 +67,6 @@ function Dashboard() {
             .map((item) => ({
               ...item,
               taskId: task.id,
-              taskTitle: task.title,
-              subjectName: task.subjectName,
             })),
         ),
       ),
@@ -91,11 +82,6 @@ function Dashboard() {
   );
 
   const editingSubject = editingSubjectId ? subjects.find((subject) => subject.id === editingSubjectId) ?? null : null;
-  const [subjectEditValues, setSubjectEditValues] = useState<SubjectEditValues>({
-    name: '',
-    category: '전공',
-    description: '',
-  });
 
   const syncSubjectEditValues = (subject: Subject | null) => {
     if (!subject) {
@@ -115,42 +101,10 @@ function Dashboard() {
       throw new Error('마감일은 오늘 이후로 선택해주세요.');
     }
 
-    const selectedSubject = values.subjectId
-      ? subjects.find((subject) => subject.id === values.subjectId)
-      : undefined;
-    const existingSubject = selectedSubject ?? findSubjectByName(values.subjectName);
-    const subject =
-      existingSubject
-        ? {
-            ...existingSubject,
-            category: values.subjectCategory,
-            description: values.subjectDescription.trim() || existingSubject.description,
-            updatedAt: new Date().toISOString(),
-          }
-        : createSubjectRecord({
-            name: values.subjectName,
-            category: values.subjectCategory,
-            description: values.subjectDescription,
-          });
+    const createdTask = await createTask(values);
+    setExpandedTaskIds((prev) => [createdTask.id, ...prev.filter((id) => id !== createdTask.id)]);
 
-    saveSubject(subject);
-
-    const analysis = await requestTaskChecklist(subject, values);
-    const task = buildTaskPlan({
-      subject,
-      formValues: values,
-      analysis: analysis.data.analysis,
-      questions: analysis.data.questions,
-      stageDrafts: analysis.data.stages,
-      analysisSource: analysis.source,
-      analysisError: analysis.errorMessage,
-    });
-
-    saveTask(task);
-    refreshBoard();
-    setExpandedTaskIds((prev) => [task.id, ...prev.filter((id) => id !== task.id)]);
-
-    const nextScope = subject.category === '교양' ? 'general' : 'major';
+    const nextScope = createdTask.subjectCategory === '교양' ? 'general' : 'major';
     if (scope !== 'all' && scope !== nextScope) {
       setSearchParams({ scope: 'all' });
     }
@@ -162,147 +116,22 @@ function Dashboard() {
     );
   };
 
-  const handleToggleItem = (taskId: string, itemId: string) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      return;
-    }
-
-    saveTask(
-      updateTaskItem(task, itemId, (item) => ({
-        ...item,
-        completed: !item.completed,
-      })),
-    );
-    refreshBoard();
-  };
-
-  const handleUpdateItem = (taskId: string, itemId: string, patch: { title?: string; dueDate?: string }) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      return;
-    }
-
-    saveTask(
-      updateTaskItem(task, itemId, (item) => ({
-        ...item,
-        ...patch,
-      })),
-    );
-    refreshBoard();
-  };
-
-  const handleAddItem = (taskId: string, stageId: string) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      return;
-    }
-
-    saveTask(addChecklistItem(task, stageId, task.dueDate));
-    refreshBoard();
-  };
-
-  const handleRemoveItem = (taskId: string, itemId: string) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      return;
-    }
-
-    saveTask(removeChecklistItem(task, itemId));
-    refreshBoard();
-  };
-
-  const handleDeleteTask = (taskId: string) => {
-    deleteTask(taskId);
-    refreshBoard();
-  };
-
-  const handleUpdateTask = (taskId: string, patch: { title?: string; description?: string; dueDate?: string }) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      return;
-    }
-
-    saveTask(updateTaskMeta(task, patch));
-    refreshBoard();
-  };
-
-  const handleRefineTask = async (taskId: string, clarifications: TaskClarification[]) => {
-    const task = tasks.find((current) => current.id === taskId);
-
-    if (!task) {
-      throw new Error('과제를 찾을 수 없습니다.');
-    }
-
-    const subject =
-      subjects.find((current) => current.id === task.subjectId) ?? {
-        id: task.subjectId,
-        name: task.subjectName,
-        category: task.subjectCategory,
-        description: '',
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
-      };
-
-    const mergedClarifications = [
-      ...(task.clarifications ?? []).filter(
-        (saved) => !clarifications.some((next) => next.question === saved.question),
-      ),
-      ...clarifications,
-    ];
-
-    const analysis = await requestTaskChecklist(
-      subject,
-      {
-        subjectId: subject.id,
-        subjectName: subject.name,
-        subjectCategory: subject.category,
-        subjectDescription: subject.description,
-        title: task.title,
-        description: task.description,
-        dueDate: task.dueDate,
-        isTeamProject: task.isTeamProject,
-      },
-      { clarifications: mergedClarifications },
-    );
-
-    saveTask(
-      refreshTaskChecklist(task, {
-        stageDrafts: analysis.data.stages,
-        analysis: analysis.data.analysis,
-        questions: analysis.data.questions,
-        clarifications: mergedClarifications,
-        analysisSource: analysis.source,
-        analysisError: analysis.errorMessage,
-      }),
-    );
-    refreshBoard();
-  };
-
   const handleOpenSubjectEdit = (subjectId: string) => {
     const subject = subjects.find((item) => item.id === subjectId) ?? null;
     setEditingSubjectId(subjectId);
     syncSubjectEditValues(subject);
   };
 
-  const handleSaveSubject = () => {
+  const handleSaveSubject = async () => {
     if (!editingSubject) {
       return;
     }
 
-    saveSubject({
-      ...editingSubject,
-      name: subjectEditValues.name.trim(),
+    await updateSubject(editingSubject.id, {
+      name: subjectEditValues.name,
       category: subjectEditValues.category,
-      description: subjectEditValues.description.trim(),
-      updatedAt: new Date().toISOString(),
+      description: subjectEditValues.description,
     });
-    refreshBoard();
     setEditingSubjectId(null);
   };
 
@@ -327,7 +156,7 @@ function Dashboard() {
         </div>
       </div>
 
-        <QuickAddTask subjects={subjects} onCreateTask={handleCreateTask} />
+      <QuickAddTask subjects={subjects} onCreateTask={handleCreateTask} />
 
       <div className="status-filter-row">
         {[
@@ -347,26 +176,49 @@ function Dashboard() {
         ))}
       </div>
 
-      <div className="task-card-list">
-        {filteredTasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            expanded={expandedTaskIds.includes(task.id)}
-            onToggleExpand={handleToggleExpand}
-            onToggleItem={handleToggleItem}
-            onUpdateItem={handleUpdateItem}
-            onAddItem={handleAddItem}
-            onRemoveItem={handleRemoveItem}
-            onDeleteTask={handleDeleteTask}
-            onOpenSubjectEdit={handleOpenSubjectEdit}
-            onUpdateTask={handleUpdateTask}
-            onRefineTask={handleRefineTask}
-          />
-        ))}
-      </div>
+      {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
 
-      {filteredTasks.length === 0 ? (
+      {loading ? (
+        <div className="empty-board">
+          <span className="material-symbols-outlined" aria-hidden>
+            sync
+          </span>
+          <p>과제를 불러오는 중입니다.</p>
+        </div>
+      ) : (
+        <div className="task-card-list">
+          {filteredTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              expanded={expandedTaskIds.includes(task.id)}
+              onToggleExpand={handleToggleExpand}
+              onToggleItem={(taskId, itemId) => {
+                void toggleTaskItem(taskId, itemId);
+              }}
+              onUpdateItem={(taskId, itemId, patch) => {
+                void updateTaskItemValue(taskId, itemId, patch);
+              }}
+              onAddItem={(taskId, stageId) => {
+                void addTaskItem(taskId, stageId);
+              }}
+              onRemoveItem={(taskId, itemId) => {
+                void removeTaskItem(taskId, itemId);
+              }}
+              onDeleteTask={(taskId) => {
+                void deleteTask(taskId);
+              }}
+              onOpenSubjectEdit={handleOpenSubjectEdit}
+              onUpdateTask={(taskId, patch) => {
+                void updateTask(taskId, patch);
+              }}
+              onRefineTask={(taskId, clarifications: TaskClarification[]) => refineTask(taskId, clarifications)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!loading && filteredTasks.length === 0 ? (
         <div className="empty-board">
           <span className="material-symbols-outlined" aria-hidden>
             dashboard
@@ -385,7 +237,9 @@ function Dashboard() {
           setEditingSubjectId(null);
           syncSubjectEditValues(null);
         }}
-        onSave={handleSaveSubject}
+        onSave={() => {
+          void handleSaveSubject();
+        }}
       />
     </div>
   );

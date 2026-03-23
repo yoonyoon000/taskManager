@@ -79,6 +79,7 @@ export function getTasks() {
   return readStorage<TaskPlan & { subjectCategory?: string }>(TASKS_KEY).map((task) => ({
     ...task,
     subjectCategory: normalizeCategory(task.subjectCategory),
+    subjectDescription: task.subjectDescription ?? '',
   }));
 }
 
@@ -89,11 +90,15 @@ export function getTaskById(taskId: string) {
 export function saveTask(task: TaskPlan) {
   const tasks = getTasks();
   const existingIndex = tasks.findIndex((item) => item.id === task.id);
+  const normalizedTask = {
+    ...task,
+    subjectDescription: task.subjectDescription ?? '',
+  };
 
   if (existingIndex >= 0) {
-    tasks[existingIndex] = task;
+    tasks[existingIndex] = normalizedTask;
   } else {
-    tasks.unshift(task);
+    tasks.unshift(normalizedTask);
   }
 
   writeStorage(TASKS_KEY, tasks);

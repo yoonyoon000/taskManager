@@ -69,6 +69,7 @@ export interface TaskPlan {
   subjectId: string;
   subjectName: string;
   subjectCategory: SubjectCategory;
+  subjectDescription?: string;
   title: string;
   description: string;
   dueDate: string;
@@ -88,6 +89,8 @@ export interface TaskAnalysisResult {
   questions: string[];
   stages: TaskChecklistStageDraft[];
 }
+
+export type Task = TaskPlan;
 
 export type TaskStatusFilter = 'all' | 'active' | 'completed' | 'urgent';
 

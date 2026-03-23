@@ -1,14 +1,24 @@
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { logout } from '../services/auth';
 import Sidebar from './Sidebar';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-function getHeaderTitle(pathname: string) {
+function getHeaderTitle(pathname: string, search: string) {
   if (pathname === '/calendar') {
     return '달력 보기';
+  }
+
+  if (search.includes('scope=major')) {
+    return '전공 과목';
+  }
+
+  if (search.includes('scope=general')) {
+    return '교양 과목';
   }
 
   return '전체 과제';
@@ -16,6 +26,7 @@ function getHeaderTitle(pathname: string) {
 
 function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { user } = useAuth();
 
   return (
     <div className="shell">
@@ -30,8 +41,14 @@ function Layout({ children }: LayoutProps) {
             </span>
             <div>
               <strong>과제 관리 도우미</strong>
-              <p>{getHeaderTitle(location.pathname)}</p>
+              <p>{getHeaderTitle(location.pathname, location.search)}</p>
             </div>
+          </div>
+          <div className="header-actions">
+            <span className="header-user">{user?.email}</span>
+            <button type="button" className="ghost-action" onClick={() => void logout()}>
+              로그아웃
+            </button>
           </div>
         </header>
         <main className="shell-content">{children}</main>
