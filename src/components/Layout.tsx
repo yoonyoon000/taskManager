@@ -45,9 +45,9 @@ function Layout({ children }: LayoutProps) {
             </div>
           </div>
           <div className="header-actions">
-            <span className="header-user">{user?.email}</span>
+            <span className="header-user">{user?.displayName || '내 작업 공간'}</span>
             <button type="button" className="ghost-action" onClick={() => void logout()}>
-              로그아웃
+              아이디 바꾸기
             </button>
           </div>
         </header>
