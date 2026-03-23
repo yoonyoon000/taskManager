@@ -43,6 +43,12 @@ interface TaskDocument {
   updatedAt: string;
 }
 
+function compactObject<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, current]) => current !== undefined),
+  ) as T;
+}
+
 function tasksCollection(uid: string) {
   return collection(db, 'users', uid, 'tasks');
 }
@@ -52,7 +58,7 @@ function normalizeCategory(value: unknown): SubjectCategory {
 }
 
 function serializeTask(task: TaskPlan): TaskDocument {
-  return {
+  return compactObject({
     taskTitle: task.title,
     taskDetail: task.description,
     subjectId: task.subjectId,
@@ -78,7 +84,7 @@ function serializeTask(task: TaskPlan): TaskDocument {
     analysisError: task.analysisError,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
-  };
+  });
 }
 
 function normalizeStages(

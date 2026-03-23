@@ -1,4 +1,5 @@
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { FirebaseError } from 'firebase/app';
 import {
   Subject,
   SubjectEditValues,
@@ -65,6 +66,23 @@ function deriveSubjects(tasks: TaskPlan[]) {
   return [...subjectMap.values()].sort((first, second) => first.name.localeCompare(second.name, 'ko'));
 }
 
+function getTaskErrorMessage(error: unknown) {
+  if (!(error instanceof FirebaseError)) {
+    return '과제 데이터를 처리하지 못했습니다. 잠시 후 다시 시도해주세요.';
+  }
+
+  switch (error.code) {
+    case 'permission-denied':
+      return 'Firestore 권한이 없어 데이터를 저장할 수 없습니다. 보안 규칙을 확인해주세요.';
+    case 'unauthenticated':
+      return '로그인 상태를 다시 확인해주세요.';
+    case 'unavailable':
+      return 'Firebase 연결이 원활하지 않습니다. 잠시 후 다시 시도해주세요.';
+    default:
+      return '과제 데이터를 처리하지 못했습니다. 잠시 후 다시 시도해주세요.';
+  }
+}
+
 export function TaskProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskPlan[]>([]);
@@ -87,9 +105,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         setErrorMessage('');
       },
-      () => {
+      (error) => {
         setLoading(false);
-        setErrorMessage('과제 데이터를 불러오지 못했습니다.');
+        setErrorMessage(getTaskErrorMessage(error));
       },
     );
 
@@ -117,40 +135,48 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   };
 
   const createTask = async (values: TaskFormValues) => {
-    const uid = requireUser();
-    const selectedSubject = values.subjectId ? subjects.find((subject) => subject.id === values.subjectId) : undefined;
-    const existingSubject = selectedSubject ?? findSubjectByName(subjects, values.subjectName);
-    const subject =
-      existingSubject
-        ? {
-            ...existingSubject,
-            category: values.subjectCategory,
-            description: values.subjectDescription.trim() || existingSubject.description,
-            updatedAt: new Date().toISOString(),
-          }
-        : createSubjectRecord({
-            name: values.subjectName,
-            category: values.subjectCategory,
-            description: values.subjectDescription,
-          });
+    try {
+      const uid = requireUser();
+      const selectedSubject = values.subjectId ? subjects.find((subject) => subject.id === values.subjectId) : undefined;
+      const existingSubject = selectedSubject ?? findSubjectByName(subjects, values.subjectName);
+      const subject =
+        existingSubject
+          ? {
+              ...existingSubject,
+              category: values.subjectCategory,
+              description: values.subjectDescription.trim() || existingSubject.description,
+              updatedAt: new Date().toISOString(),
+            }
+          : createSubjectRecord({
+              name: values.subjectName,
+              category: values.subjectCategory,
+              description: values.subjectDescription,
+            });
 
-    const analysis = await requestTaskChecklist(subject, values);
-    const task = buildTaskPlan({
-      subject,
-      formValues: values,
-      analysis: analysis.data.analysis,
-      questions: analysis.data.questions,
-      stageDrafts: analysis.data.stages,
-      analysisSource: analysis.source,
-      analysisError: analysis.errorMessage,
-    });
+      const analysis = await requestTaskChecklist(subject, values);
+      const task = buildTaskPlan({
+        subject,
+        formValues: values,
+        analysis: analysis.data.analysis,
+        questions: analysis.data.questions,
+        stageDrafts: analysis.data.stages,
+        analysisSource: analysis.source,
+        analysisError: analysis.errorMessage,
+      });
 
-    return addTaskDoc(uid, task);
+      return await addTaskDoc(uid, task);
+    } catch (error) {
+      throw new Error(getTaskErrorMessage(error));
+    }
   };
 
   const persistTask = async (nextTask: TaskPlan) => {
-    const uid = requireUser();
-    await updateTaskDoc(uid, nextTask);
+    try {
+      const uid = requireUser();
+      await updateTaskDoc(uid, nextTask);
+    } catch (error) {
+      throw new Error(getTaskErrorMessage(error));
+    }
   };
 
   const toggleTaskItem = async (taskId: string, itemId: string) => {
@@ -188,8 +214,12 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteTask = async (taskId: string) => {
-    const uid = requireUser();
-    await deleteTaskDoc(uid, taskId);
+    try {
+      const uid = requireUser();
+      await deleteTaskDoc(uid, taskId);
+    } catch (error) {
+      throw new Error(getTaskErrorMessage(error));
+    }
   };
 
   const updateTask = async (
@@ -247,12 +277,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   };
 
   const updateSubject = async (subjectId: string, values: SubjectEditValues) => {
-    const uid = requireUser();
-    await updateSubjectDocs(uid, tasks, subjectId, {
-      name: values.name.trim(),
-      category: values.category,
-      description: values.description.trim(),
-    });
+    try {
+      const uid = requireUser();
+      await updateSubjectDocs(uid, tasks, subjectId, {
+        name: values.name.trim(),
+        category: values.category,
+        description: values.description.trim(),
+      });
+    } catch (error) {
+      throw new Error(getTaskErrorMessage(error));
+    }
   };
 
   const value = useMemo(
