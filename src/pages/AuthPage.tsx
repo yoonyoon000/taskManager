@@ -28,7 +28,7 @@ function AuthPage() {
     <div className="auth-shell">
       <section className="auth-card">
         <div className="auth-head">
-          <p className="eyebrow">개인 작업 공간</p>
+          <p className="eyebrow">태스크 분배</p>
           <h1>Task Manager</h1>
         </div>
         <form
@@ -45,6 +45,7 @@ function AuthPage() {
             placeholder="아이디"
             autoComplete="username"
           />
+          <p className="auth-hint">'nemo'를 입력하여 예시를 보세요</p>
           {errorMessage ? <p className="auth-error">{errorMessage}</p> : null}
           <button type="submit" className="primary-action auth-submit" disabled={isLoading}>
             {isLoading ? '시작하는 중...' : '바로 시작하기'}
