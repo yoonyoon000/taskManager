@@ -29,8 +29,7 @@ function AuthPage() {
       <section className="auth-card">
         <div className="auth-head">
           <p className="eyebrow">개인 작업 공간</p>
-          <h1>아이디만 입력하면 바로 시작할 수 있어요</h1>
-          <p>같은 브라우저에서는 로그인 상태가 유지되어 내 과제를 이어서 관리할 수 있습니다.</p>
+          <h1>Task Manager</h1>
         </div>
         <form
           className="auth-form"
