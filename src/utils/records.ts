@@ -1,49 +1,25 @@
-import { DailyRecord } from '../types/record';
+const LAST_USER_ID_KEY = 'today-records/last-user-id';
 
-const RECORDS_KEY = 'today-records/items';
-
-function isDailyRecord(value: unknown): value is DailyRecord {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return (
-    typeof record.id === 'string' &&
-    typeof record.text === 'string' &&
-    typeof record.createdAt === 'number'
-  );
-}
-
-export function loadRecords() {
+export function loadLastUserId() {
   if (typeof window === 'undefined') {
-    return [] as DailyRecord[];
+    return '';
   }
 
-  try {
-    const raw = window.localStorage.getItem(RECORDS_KEY);
-
-    if (!raw) {
-      return [] as DailyRecord[];
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) {
-      return [] as DailyRecord[];
-    }
-
-    return parsed.filter(isDailyRecord).sort((a, b) => b.createdAt - a.createdAt);
-  } catch {
-    return [] as DailyRecord[];
-  }
+  return window.localStorage.getItem(LAST_USER_ID_KEY) ?? '';
 }
 
-export function saveRecords(records: DailyRecord[]) {
+export function saveLastUserId(userId: string) {
   if (typeof window === 'undefined') {
     return;
   }
 
-  window.localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+  window.localStorage.setItem(LAST_USER_ID_KEY, userId);
+}
+
+export function clearLastUserId() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(LAST_USER_ID_KEY);
 }
