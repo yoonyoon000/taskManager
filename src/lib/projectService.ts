@@ -1,12 +1,13 @@
 import { FirebaseError } from 'firebase/app';
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
-  onSnapshot,
+  getDocs,
   orderBy,
   query,
+  setDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { ProjectItem, ProjectLog } from '../types/project';
@@ -21,12 +22,25 @@ interface StoredLog {
   createdAt?: number;
 }
 
+export interface WorkspaceSnapshot {
+  projects: ProjectItem[];
+  logsByProject: Record<string, ProjectLog[]>;
+}
+
 function projectsCollection(uid: string) {
   return collection(db, 'users', uid, 'projects');
 }
 
+function projectDoc(uid: string, projectId: string) {
+  return doc(db, 'users', uid, 'projects', projectId);
+}
+
 function logsCollection(uid: string, projectId: string) {
   return collection(db, 'users', uid, 'projects', projectId, 'logs');
+}
+
+function logDoc(uid: string, projectId: string, logId: string) {
+  return doc(db, 'users', uid, 'projects', projectId, 'logs', logId);
 }
 
 function mapErrorMessage(error: unknown) {
@@ -36,7 +50,7 @@ function mapErrorMessage(error: unknown) {
 
   switch (error.code) {
     case 'permission-denied':
-      return 'Firebase 권한이 없어 데이터를 불러오거나 저장할 수 없습니다.';
+      return 'Firebase 권한이 없어 데이터를 저장하거나 불러올 수 없습니다.';
     case 'unavailable':
       return 'Firebase 연결이 원활하지 않습니다. 잠시 후 다시 시도해주세요.';
     default:
@@ -60,68 +74,69 @@ function toLog(id: string, data: StoredLog): ProjectLog {
   };
 }
 
-export function subscribeProjects(
-  uid: string,
-  onData: (projects: ProjectItem[]) => void,
-  onError?: (message: string) => void,
-) {
-  const projectsQuery = query(projectsCollection(uid), orderBy('createdAt', 'desc'));
-
-  return onSnapshot(
-    projectsQuery,
-    (snapshot) => {
-      onData(snapshot.docs.map((item) => toProject(item.id, item.data() as StoredProject)));
-    },
-    (error) => {
-      onError?.(mapErrorMessage(error));
-    },
-  );
-}
-
-export function subscribeLogs(
-  uid: string,
-  projectId: string,
-  onData: (logs: ProjectLog[]) => void,
-  onError?: (message: string) => void,
-) {
-  const logsQuery = query(logsCollection(uid, projectId), orderBy('createdAt', 'desc'));
-
-  return onSnapshot(
-    logsQuery,
-    (snapshot) => {
-      onData(snapshot.docs.map((item) => toLog(item.id, item.data() as StoredLog)));
-    },
-    (error) => {
-      onError?.(mapErrorMessage(error));
-    },
-  );
-}
-
-export async function createProject(uid: string, name: string) {
+export async function getWorkspace(uid: string) {
   try {
-    await addDoc(projectsCollection(uid), {
-      name,
-      createdAt: Date.now(),
-    });
+    const projectsQuery = query(projectsCollection(uid), orderBy('createdAt', 'desc'));
+    const projectsSnapshot = await getDocs(projectsQuery);
+    const projects = projectsSnapshot.docs.map((item) =>
+      toProject(item.id, item.data() as StoredProject),
+    );
+
+    const logsByProject: Record<string, ProjectLog[]> = {};
+
+    await Promise.all(
+      projects.map(async (project) => {
+        const logsQuery = query(logsCollection(uid, project.id), orderBy('createdAt', 'desc'));
+        const logsSnapshot = await getDocs(logsQuery);
+        logsByProject[project.id] = logsSnapshot.docs.map((item) =>
+          toLog(item.id, item.data() as StoredLog),
+        );
+      }),
+    );
+
+    return {
+      projects,
+      logsByProject,
+    } as WorkspaceSnapshot;
   } catch (error) {
     throw new Error(mapErrorMessage(error));
   }
 }
 
-export async function addLog(uid: string, projectId: string, text: string) {
+export async function saveWorkspace(uid: string, workspace: WorkspaceSnapshot) {
   try {
-    await addDoc(logsCollection(uid, projectId), {
-      text,
-      createdAt: Date.now(),
-    });
-  } catch (error) {
-    throw new Error(mapErrorMessage(error));
-  }
-}
+    const existingProjects = await getDocs(projectsCollection(uid));
+    const deleteBatch = writeBatch(db);
 
-export async function deleteLog(uid: string, projectId: string, logId: string) {
-  try {
-    await deleteDoc(doc(db, 'users', uid, 'projects', projectId, 'logs', logId));
+    await Promise.all(
+      existingProjects.docs.map(async (projectSnapshot) => {
+        const logsSnapshot = await getDocs(logsCollection(uid, projectSnapshot.id));
+        logsSnapshot.docs.forEach((logSnapshot) => {
+          deleteBatch.delete(logDoc(uid, projectSnapshot.id, logSnapshot.id));
+        });
+        deleteBatch.delete(projectDoc(uid, projectSnapshot.id));
+      }),
+    );
+
+    await deleteBatch.commit();
+
+    const saveBatch = writeBatch(db);
+
+    workspace.projects.forEach((project) => {
+      saveBatch.set(projectDoc(uid, project.id), {
+        name: project.name,
+        createdAt: project.createdAt,
+      });
+
+      (workspace.logsByProject[project.id] ?? []).forEach((log) => {
+        saveBatch.set(logDoc(uid, project.id, log.id), {
+          text: log.text,
+          createdAt: log.createdAt,
+        });
+      });
+    });
+
+    await saveBatch.commit();
   } catch (error) {
     throw new Error(mapErrorMessage(error));
   }

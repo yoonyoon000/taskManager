@@ -1,7 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from '../lib/firebase';
-import { addLog, createProject, deleteLog, subscribeLogs, subscribeProjects } from '../lib/projectService';
+import { getWorkspace, saveWorkspace } from '../lib/projectService';
 import { login, logout } from '../services/auth';
 import { ProjectItem, ProjectLog } from '../types/project';
 import { clearLastUserId, loadLastUserId, saveLastUserId } from '../utils/records';
@@ -54,150 +52,74 @@ function groupLogs(logs: ProjectLog[]) {
 }
 
 function HomePage() {
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [userIdInput, setUserIdInput] = useState(() => loadLastUserId());
+  const [isOnboarding, setIsOnboarding] = useState(true);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [logsByProject, setLogsByProject] = useState<Record<string, ProjectLog[]>>({});
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [projectNameInput, setProjectNameInput] = useState('');
   const [logInput, setLogInput] = useState('');
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [logs, setLogs] = useState<ProjectLog[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [authLoading, setAuthLoading] = useState(true);
-  const [projectsLoading, setProjectsLoading] = useState(false);
-  const [logsLoading, setLogsLoading] = useState(false);
+  const [saveUserIdInput, setSaveUserIdInput] = useState(() => loadLastUserId());
+  const [savedUserId, setSavedUserId] = useState(() => loadLastUserId());
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    const savedUserId = loadLastUserId();
-    let restoreAttempted = false;
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setAuthUser(user);
-
-      if (user?.displayName) {
-        setUserIdInput(user.displayName);
-        saveLastUserId(user.displayName);
-      }
-
-      if (!restoreAttempted) {
-        restoreAttempted = true;
-
-        if (!user && savedUserId) {
-          try {
-            await login(savedUserId);
-            return;
-          } catch (error) {
-            clearLastUserId();
-            setErrorMessage(error instanceof Error ? error.message : '아이디로 입장하지 못했습니다.');
-          }
-        }
-      }
-
-      setAuthLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    if (!authUser) {
-      setProjects([]);
-      setSelectedProjectId('');
-      setProjectsLoading(false);
-      return;
+    if (!isOnboarding && savedUserId) {
+      void loadWorkspace(savedUserId);
     }
-
-    setProjectsLoading(true);
-    const unsubscribe = subscribeProjects(
-      authUser.uid,
-      (nextProjects) => {
-        setProjects(nextProjects);
-        setProjectsLoading(false);
-        setErrorMessage('');
-
-        setSelectedProjectId((current) => {
-          if (current && nextProjects.some((project) => project.id === current)) {
-            return current;
-          }
-
-          return nextProjects[0]?.id ?? '';
-        });
-      },
-      (message) => {
-        setProjects([]);
-        setSelectedProjectId('');
-        setProjectsLoading(false);
-        setErrorMessage(message);
-      },
-    );
-
-    return unsubscribe;
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser || !selectedProjectId) {
-      setLogs([]);
-      setLogsLoading(false);
-      return;
-    }
-
-    setLogsLoading(true);
-    const unsubscribe = subscribeLogs(
-      authUser.uid,
-      selectedProjectId,
-      (nextLogs) => {
-        setLogs(nextLogs);
-        setLogsLoading(false);
-        setErrorMessage('');
-      },
-      (message) => {
-        setLogs([]);
-        setLogsLoading(false);
-        setErrorMessage(message);
-      },
-    );
-
-    return unsubscribe;
-  }, [authUser, selectedProjectId]);
+  }, [isOnboarding]);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
 
-  const groupedLogs = useMemo(() => groupLogs(logs), [logs]);
+  const groupedLogs = useMemo(
+    () => groupLogs(selectedProject ? logsByProject[selectedProject.id] ?? [] : []),
+    [logsByProject, selectedProject],
+  );
 
-  const handleEnter = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const selectProjectIfNeeded = (nextProjects: ProjectItem[]) => {
+    setSelectedProjectId((current) => {
+      if (current && nextProjects.some((project) => project.id === current)) {
+        return current;
+      }
 
-    const trimmedUserId = userIdInput.trim();
+      return nextProjects[0]?.id ?? '';
+    });
+  };
+
+  const loadWorkspace = async (userId: string) => {
+    const trimmedUserId = userId.trim();
 
     if (!trimmedUserId) {
-      setErrorMessage('아이디를 입력해주세요.');
       return;
     }
 
+    setIsLoadingWorkspace(true);
     setErrorMessage('');
-    setIsSubmitting(true);
 
     try {
-      await login(trimmedUserId);
+      const credential = await login(trimmedUserId);
+      const workspace = await getWorkspace(credential.user.uid);
+
+      setProjects(workspace.projects);
+      setLogsByProject(workspace.logsByProject);
+      selectProjectIfNeeded(workspace.projects);
+      setSavedUserId(trimmedUserId);
+      setSaveUserIdInput(trimmedUserId);
       saveLastUserId(trimmedUserId);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '아이디로 입장하지 못했습니다.');
+      setErrorMessage(error instanceof Error ? error.message : '저장한 데이터를 불러오지 못했습니다.');
     } finally {
-      setIsSubmitting(false);
-      setAuthLoading(false);
+      setIsLoadingWorkspace(false);
     }
   };
 
-  const handleCreateProject = async (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateProject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (!authUser) {
-      return;
-    }
-
     const trimmedName = projectNameInput.trim();
 
     if (!trimmedName) {
@@ -205,23 +127,28 @@ function HomePage() {
       return;
     }
 
-    setErrorMessage('');
-    setIsSubmitting(true);
+    const nextProject: ProjectItem = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      createdAt: Date.now(),
+    };
 
-    try {
-      await createProject(authUser.uid, trimmedName);
-      setProjectNameInput('');
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '프로젝트를 만들지 못했습니다.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    const nextProjects = [nextProject, ...projects];
+    setProjects(nextProjects);
+    setLogsByProject((prev) => ({
+      ...prev,
+      [nextProject.id]: [],
+    }));
+    setSelectedProjectId(nextProject.id);
+    setProjectNameInput('');
+    setErrorMessage('');
   };
 
-  const handleAddLog = async (event: FormEvent<HTMLFormElement>) => {
+  const handleAddLog = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!authUser || !selectedProject) {
+    if (!selectedProject) {
+      setErrorMessage('먼저 프로젝트를 선택해주세요.');
       return;
     }
 
@@ -231,77 +158,80 @@ function HomePage() {
       return;
     }
 
+    const nextLog: ProjectLog = {
+      id: crypto.randomUUID(),
+      text: trimmedText,
+      createdAt: Date.now(),
+    };
+
+    setLogsByProject((prev) => ({
+      ...prev,
+      [selectedProject.id]: [nextLog, ...(prev[selectedProject.id] ?? [])],
+    }));
+    setLogInput('');
     setErrorMessage('');
+  };
+
+  const handleDeleteLog = (logId: string) => {
+    if (!selectedProject) {
+      return;
+    }
+
+    setLogsByProject((prev) => ({
+      ...prev,
+      [selectedProject.id]: (prev[selectedProject.id] ?? []).filter((log) => log.id !== logId),
+    }));
+  };
+
+  const handleSaveWorkspace = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedUserId = saveUserIdInput.trim();
+
+    if (!trimmedUserId) {
+      setErrorMessage('아이디를 입력해주세요.');
+      return;
+    }
+
     setIsSubmitting(true);
+    setErrorMessage('');
 
     try {
-      await addLog(authUser.uid, selectedProject.id, trimmedText);
-      setLogInput('');
+      const credential = await login(trimmedUserId);
+      await saveWorkspace(credential.user.uid, {
+        projects,
+        logsByProject,
+      });
+      setSavedUserId(trimmedUserId);
+      saveLastUserId(trimmedUserId);
+      setIsSaveModalOpen(false);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '작업 로그를 저장하지 못했습니다.');
+      setErrorMessage(error instanceof Error ? error.message : '저장하지 못했습니다.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteLog = async (logId: string) => {
-    if (!authUser || !selectedProject) {
-      return;
-    }
-
-    setErrorMessage('');
-
-    try {
-      await deleteLog(authUser.uid, selectedProject.id, logId);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '작업 로그를 삭제하지 못했습니다.');
-    }
-  };
-
-  const handleLogout = async () => {
+  const handleChangeSavedUser = async () => {
     await logout();
     clearLastUserId();
-    setProjects([]);
-    setLogs([]);
-    setSelectedProjectId('');
-    setProjectNameInput('');
-    setLogInput('');
-    setUserIdInput('');
+    setSavedUserId('');
+    setSaveUserIdInput('');
   };
 
-  if (authLoading) {
+  if (isOnboarding) {
     return (
       <main className="home-page">
-        <section className="home-panel">
-          <p className="empty-copy">데이터를 불러오는 중입니다.</p>
-        </section>
-      </main>
-    );
-  }
-
-  if (!authUser) {
-    return (
-      <main className="home-page">
-        <section className="home-panel login-panel">
-          <header className="panel-head">
-            <p className="section-label">프로젝트 작업 로그</p>
-            <h1>사용자별 작업 기록을 관리하세요</h1>
-          </header>
-
-          <form className="inline-form" onSubmit={handleEnter}>
-            <input
-              type="text"
-              value={userIdInput}
-              onChange={(event) => setUserIdInput(event.target.value)}
-              placeholder="사용자 아이디 입력"
-              className="text-input"
-            />
-            <button type="submit" className="primary-button wide-button" disabled={isSubmitting}>
-              {isSubmitting ? '...' : '시작하기'}
-            </button>
-          </form>
-
-          {errorMessage ? <p className="error-copy">{errorMessage}</p> : null}
+        <section className="onboarding-panel">
+          <p className="section-label">프로젝트 작업 로그</p>
+          <h1>프로젝트별로 내가 한 작업을 기록하고 쌓아보세요</h1>
+          <ol className="onboarding-steps">
+            <li>프로젝트를 만든다</li>
+            <li>오늘 한 작업을 기록한다</li>
+            <li>저장해서 나중에 이어본다</li>
+          </ol>
+          <button type="button" className="primary-button onboarding-button" onClick={() => setIsOnboarding(false)}>
+            시작하기
+          </button>
         </section>
       </main>
     );
@@ -313,13 +243,24 @@ function HomePage() {
         <aside className="project-sidebar">
           <header className="project-sidebar-head">
             <div>
-              <p className="section-label">현재 사용자: {authUser.displayName || '사용자'}</p>
+              <p className="section-label">프로젝트 작업 로그</p>
               <h2>내 프로젝트</h2>
             </div>
-            <button type="button" className="secondary-button" onClick={() => void handleLogout()}>
-              사용자 변경
-            </button>
+            <div className="sidebar-actions">
+              <button type="button" className="secondary-button" onClick={() => setIsSaveModalOpen(true)}>
+                저장하기
+              </button>
+            </div>
           </header>
+
+          <div className="save-status">
+            <span>{savedUserId ? `이어보는 아이디: ${savedUserId}` : '아직 저장 전입니다.'}</span>
+            {savedUserId ? (
+              <button type="button" className="user-link" onClick={() => void handleChangeSavedUser()}>
+                아이디 변경
+              </button>
+            ) : null}
+          </div>
 
           <form className="inline-form project-create-form" onSubmit={handleCreateProject}>
             <input
@@ -329,14 +270,14 @@ function HomePage() {
               placeholder="새 프로젝트 이름"
               className="text-input"
             />
-            <button type="submit" className="primary-button" disabled={isSubmitting}>
+            <button type="submit" className="primary-button">
               +
             </button>
           </form>
 
           <div className="project-list">
-            {projectsLoading ? (
-              <p className="empty-copy">프로젝트를 불러오는 중입니다.</p>
+            {isLoadingWorkspace ? (
+              <p className="empty-copy">저장된 데이터를 불러오는 중입니다.</p>
             ) : projects.length > 0 ? (
               projects.map((project) => (
                 <button
@@ -359,10 +300,10 @@ function HomePage() {
           {selectedProject ? (
             <>
               <header className="project-detail-head">
-                <button type="button" className="back-button" onClick={() => setSelectedProjectId('')}>
-                  프로젝트 목록
-                </button>
-                <h1>{selectedProject.name}</h1>
+                <div>
+                  <p className="section-label">작업 로그</p>
+                  <h1>{selectedProject.name}</h1>
+                </div>
               </header>
 
               <form className="inline-form log-form" onSubmit={handleAddLog}>
@@ -373,7 +314,7 @@ function HomePage() {
                   placeholder="오늘 한 작업을 적어주세요"
                   className="text-input"
                 />
-                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                <button type="submit" className="primary-button">
                   +
                 </button>
               </form>
@@ -381,9 +322,7 @@ function HomePage() {
               {errorMessage ? <p className="error-copy">{errorMessage}</p> : null}
 
               <section className="log-list">
-                {logsLoading ? (
-                  <p className="empty-copy">작업 로그를 불러오는 중입니다.</p>
-                ) : groupedLogs.length > 0 ? (
+                {groupedLogs.length > 0 ? (
                   groupedLogs.map((group) => (
                     <div key={group.dateKey} className="log-group">
                       <h3>{group.dateLabel}</h3>
@@ -397,7 +336,7 @@ function HomePage() {
                             <button
                               type="button"
                               className="log-delete"
-                              onClick={() => void handleDeleteLog(log.id)}
+                              onClick={() => handleDeleteLog(log.id)}
                               aria-label="로그 삭제"
                             >
                               삭제
@@ -416,11 +355,37 @@ function HomePage() {
             <section className="project-placeholder">
               <p className="section-label">프로젝트</p>
               <h1>프로젝트를 선택하세요</h1>
-              <p className="empty-copy">왼쪽에서 프로젝트를 선택하면 작업 로그를 볼 수 있습니다.</p>
+              <p className="empty-copy">왼쪽에서 프로젝트를 선택하거나 새로 만들어서 작업 로그를 시작할 수 있습니다.</p>
             </section>
           )}
         </section>
       </section>
+
+      {isSaveModalOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setIsSaveModalOpen(false)}>
+          <section className="save-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <p className="section-label">기록을 저장할게요</p>
+            <h2>아이디를 입력하면 나중에 이어서 볼 수 있어요</h2>
+            <form className="save-modal-form" onSubmit={handleSaveWorkspace}>
+              <input
+                type="text"
+                value={saveUserIdInput}
+                onChange={(event) => setSaveUserIdInput(event.target.value)}
+                placeholder="아이디 입력"
+                className="text-input"
+              />
+              <div className="save-modal-actions">
+                <button type="button" className="secondary-button" onClick={() => setIsSaveModalOpen(false)}>
+                  닫기
+                </button>
+                <button type="submit" className="primary-button wide-button" disabled={isSubmitting}>
+                  {isSubmitting ? '저장 중...' : '저장하기'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
