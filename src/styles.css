@@ -1,7 +1,7 @@
 :root {
   font-family: 'Pretendard Variable', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-  color: #181818;
-  background: #f7f7f7;
+  color: #171717;
+  background: #f5f5f4;
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light;
@@ -24,8 +24,8 @@ body,
 body {
   margin: 0;
   min-width: 320px;
-  background: #f7f7f7;
-  color: #181818;
+  background: #f5f5f4;
+  color: #171717;
 }
 
 button,
@@ -39,122 +39,186 @@ button {
 
 input {
   width: 100%;
-  border: 1px solid #dcdcdc;
+  border: 1px solid #ddddda;
   background: #ffffff;
-  color: #181818;
+  color: #171717;
 }
 
 .home-page {
   min-height: 100vh;
+  padding: 40px 20px;
+}
+
+.workspace-shell,
+.login-panel {
+  width: min(100%, 1080px);
+  margin: 0 auto;
+}
+
+.workspace-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+}
+
+.project-sidebar,
+.project-detail,
+.login-panel {
+  border: 1px solid #e5e5e2;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.panel-head,
+.project-sidebar-head,
+.project-detail-head {
   display: flex;
-  justify-content: center;
-  padding: 64px 20px 72px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.home-panel {
-  width: min(100%, 720px);
-}
-
-.home-head {
-  margin-bottom: 24px;
-}
-
-.home-label {
+.section-label {
   margin: 0;
-  color: #7a7a7a;
-  font-size: 0.95rem;
+  color: #7a7a74;
+  font-size: 0.9rem;
 }
 
-.home-head h1 {
+.panel-head h1,
+.project-detail-head h1,
+.project-placeholder h1 {
   margin: 8px 0 0;
-  font-size: clamp(1.8rem, 4vw, 2.5rem);
-  line-height: 1.25;
+  font-size: clamp(1.75rem, 4vw, 2.4rem);
+  line-height: 1.2;
   letter-spacing: -0.03em;
-  font-weight: 600;
 }
 
-.record-form {
+.project-sidebar-head h2 {
+  margin: 8px 0 0;
+  font-size: 1.4rem;
+  letter-spacing: -0.03em;
+}
+
+.inline-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px;
+  grid-template-columns: minmax(0, 1fr) 72px;
   gap: 10px;
   align-items: center;
 }
 
-.user-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px;
-  gap: 10px;
-  align-items: center;
+.project-create-form,
+.log-form {
+  margin-top: 18px;
 }
 
-.record-input {
+.text-input {
   height: 52px;
   border-radius: 16px;
-  padding: 0 18px;
+  padding: 0 16px;
+  font-size: 0.98rem;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #bdbdb8;
+}
+
+.primary-button,
+.secondary-button,
+.back-button {
+  border: 0;
+  border-radius: 16px;
+  height: 52px;
+  padding: 0 14px;
+}
+
+.primary-button {
+  background: #171717;
+  color: #ffffff;
+  font-size: 1.25rem;
+}
+
+.wide-button {
+  font-size: 0.98rem;
+}
+
+.secondary-button,
+.back-button {
+  background: #f1f1ef;
+  color: #333333;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.project-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e8e8e5;
+  background: #fafaf9;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.project-card.is-active {
+  border-color: #d2d2ce;
+  background: #f1f1ef;
+}
+
+.project-card strong {
+  display: block;
   font-size: 1rem;
 }
 
-.record-input:focus {
-  outline: none;
-  border-color: #bdbdbd;
+.project-card span {
+  display: block;
+  margin-top: 4px;
+  color: #7a7a74;
+  font-size: 0.88rem;
 }
 
-.record-submit {
-  height: 52px;
-  border: 0;
-  border-radius: 16px;
-  background: #181818;
-  color: #ffffff;
-  font-size: 1.5rem;
-  line-height: 1;
-}
-
-.record-list {
-  margin-top: 32px;
-}
-
-.user-meta {
+.project-placeholder {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #7a7a7a;
-  font-size: 0.92rem;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 420px;
 }
 
-.user-change {
-  border: 0;
-  background: transparent;
-  color: #5f5f5f;
-  padding: 0;
-}
-
-.record-group + .record-group {
+.log-list {
   margin-top: 28px;
 }
 
-.record-group h2 {
-  margin: 0 0 12px;
-  font-size: 1rem;
-  color: #5f5f5f;
-  font-weight: 600;
+.log-group + .log-group {
+  margin-top: 28px;
 }
 
-.record-group ul {
+.log-group h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: #64645f;
+}
+
+.log-group ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.record-item {
+.log-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   padding: 14px 0;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid #ededeb;
 }
 
-.record-text-wrap {
+.log-text-wrap {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -162,75 +226,81 @@ input {
   flex-wrap: wrap;
 }
 
-.record-text {
+.log-text {
   font-size: 1rem;
-  color: #181818;
   word-break: break-word;
 }
 
-.record-time {
-  color: #8d8d8d;
-  font-size: 0.92rem;
+.log-time {
+  color: #8b8b86;
+  font-size: 0.9rem;
   white-space: nowrap;
 }
 
-.record-delete {
+.log-delete {
   opacity: 0;
   border: 0;
   background: transparent;
-  color: #9a9a9a;
+  color: #9a9a95;
   padding: 4px 0;
   transition: opacity 0.18s ease;
 }
 
-.record-item:hover .record-delete,
-.record-delete:focus-visible {
+.log-item:hover .log-delete,
+.log-delete:focus-visible {
   opacity: 1;
 }
 
-.record-empty {
-  margin: 32px 0 0;
-  color: #8d8d8d;
-  font-size: 0.96rem;
+.error-copy {
+  margin: 14px 0 0;
+  color: #b14545;
+  font-size: 0.92rem;
 }
 
-.record-error {
-  margin: 14px 0 0;
-  color: #b44343;
-  font-size: 0.92rem;
+.empty-copy {
+  margin: 24px 0 0;
+  color: #8b8b86;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 900px) {
+  .workspace-shell {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
   .home-page {
-    padding: 32px 16px 48px;
+    padding: 20px 14px 32px;
   }
 
-  .record-form,
-  .user-form {
-    grid-template-columns: minmax(0, 1fr) 48px;
+  .project-sidebar,
+  .project-detail,
+  .login-panel {
+    padding: 18px;
+    border-radius: 18px;
   }
 
-  .record-input,
-  .record-submit {
+  .panel-head,
+  .project-sidebar-head,
+  .project-detail-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .inline-form {
+    grid-template-columns: minmax(0, 1fr) 58px;
+  }
+
+  .text-input,
+  .primary-button,
+  .secondary-button,
+  .back-button {
     height: 48px;
     border-radius: 14px;
   }
 
-  .record-item {
-    align-items: flex-start;
-  }
-
-  .home-head {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .user-meta {
-    justify-content: space-between;
-  }
-
-  .record-delete {
+  .log-delete {
     opacity: 1;
   }
 }
