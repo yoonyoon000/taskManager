@@ -55,6 +55,7 @@ function HomePage() {
   const [isOnboarding, setIsOnboarding] = useState(true);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [logsByProject, setLogsByProject] = useState<Record<string, ProjectLog[]>>({});
+  const [collapsedDateKeys, setCollapsedDateKeys] = useState<string[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [projectNameInput, setProjectNameInput] = useState('');
   const [logInput, setLogInput] = useState('');
@@ -70,6 +71,10 @@ function HomePage() {
       void loadWorkspace(savedUserId);
     }
   }, [isOnboarding]);
+
+  useEffect(() => {
+    setCollapsedDateKeys([]);
+  }, [selectedProjectId]);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -232,6 +237,12 @@ function HomePage() {
     setSaveUserIdInput('');
   };
 
+  const toggleDateGroup = (dateKey: string) => {
+    setCollapsedDateKeys((current) =>
+      current.includes(dateKey) ? current.filter((key) => key !== dateKey) : [...current, dateKey],
+    );
+  };
+
   if (isOnboarding) {
     return (
       <main className="home-page">
@@ -359,30 +370,45 @@ function HomePage() {
               <section className="log-list">
                 {groupedLogs.length > 0 ? (
                   groupedLogs.map((group) => (
-                    <div key={group.dateKey} className="log-group">
+                    <article key={group.dateKey} className="log-group-card">
                       <div className="log-group-head">
-                        <h3>{group.dateLabel}</h3>
-                        <span>{group.items.length}개 기록</span>
+                        <div className="log-group-meta">
+                          <h3>{group.dateLabel}</h3>
+                          <span>{group.items.length}개 기록</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="log-group-toggle"
+                          onClick={() => toggleDateGroup(group.dateKey)}
+                          aria-expanded={!collapsedDateKeys.includes(group.dateKey)}
+                        >
+                          {collapsedDateKeys.includes(group.dateKey) ? '펼치기' : '접기'}
+                        </button>
                       </div>
-                      <ul>
-                        {group.items.map((log) => (
-                          <li key={log.id} className="log-item">
-                            <div className="log-text-wrap">
-                              <span className="log-text">{log.text}</span>
+                      {!collapsedDateKeys.includes(group.dateKey) ? (
+                        <ul className="log-group-list">
+                          {group.items.map((log) => (
+                            <li key={log.id} className="log-item">
+                              <div className="log-text-wrap">
+                                <span className="log-bullet" aria-hidden="true">
+                                  •
+                                </span>
+                                <span className="log-text">{log.text}</span>
+                              </div>
                               <time className="log-time">{formatTimeLabel(log.createdAt)}</time>
-                            </div>
-                            <button
-                              type="button"
-                              className="log-delete"
-                              onClick={() => handleDeleteLog(log.id)}
-                              aria-label="로그 삭제"
-                            >
-                              삭제
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                              <button
+                                type="button"
+                                className="log-delete"
+                                onClick={() => handleDeleteLog(log.id)}
+                                aria-label="로그 삭제"
+                              >
+                                삭제
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </article>
                   ))
                 ) : (
                   <p className="empty-copy">아직 작업 로그가 없습니다.</p>
