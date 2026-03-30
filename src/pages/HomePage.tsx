@@ -81,6 +81,20 @@ function HomePage() {
     [logsByProject, selectedProject],
   );
 
+  const projectSummaries = useMemo(
+    () =>
+      projects.map((project) => {
+        const recentLog = (logsByProject[project.id] ?? [])[0] ?? null;
+
+        return {
+          ...project,
+          recentLogText: recentLog?.text ?? '아직 작업 로그가 없습니다.',
+          recentLogDate: recentLog?.createdAt ?? project.createdAt,
+        };
+      }),
+    [logsByProject, projects],
+  );
+
   const selectProjectIfNeeded = (nextProjects: ProjectItem[]) => {
     setSelectedProjectId((current) => {
       if (current && nextProjects.some((project) => project.id === current)) {
@@ -222,13 +236,24 @@ function HomePage() {
     return (
       <main className="home-page">
         <section className="onboarding-panel">
-          <p className="section-label">프로젝트 작업 로그</p>
+          <div className="onboarding-badge">프로젝트 작업 로그</div>
           <h1>프로젝트별로 내가 한 작업을 기록하고 쌓아보세요</h1>
-          <ol className="onboarding-steps">
-            <li>프로젝트를 만든다</li>
-            <li>오늘 한 작업을 기록한다</li>
-            <li>저장해서 나중에 이어본다</li>
-          </ol>
+          <p className="onboarding-copy">
+            해야 할 일을 정리하는 대신, 실제로 진행한 작업을 프로젝트 안에 차곡차곡 남기는 앱입니다.
+          </p>
+          <div className="onboarding-steps-grid">
+            {[
+              ['1', '프로젝트를 만든다', '작업을 기록할 프로젝트 이름만 간단히 추가합니다.'],
+              ['2', '오늘 한 작업을 적는다', '입력창에 한 줄씩 바로 남기면 됩니다.'],
+              ['3', '저장해서 다음에 이어본다', '아이디를 입력해 두면 같은 기록을 다시 불러올 수 있습니다.'],
+            ].map(([step, title, description]) => (
+              <article key={step} className="onboarding-step-card">
+                <span className="step-chip">{step}</span>
+                <strong>{title}</strong>
+                <p>{description}</p>
+              </article>
+            ))}
+          </div>
           <button type="button" className="primary-button onboarding-button" onClick={() => setIsOnboarding(false)}>
             시작하기
           </button>
@@ -278,16 +303,20 @@ function HomePage() {
           <div className="project-list">
             {isLoadingWorkspace ? (
               <p className="empty-copy">저장된 데이터를 불러오는 중입니다.</p>
-            ) : projects.length > 0 ? (
-              projects.map((project) => (
+            ) : projectSummaries.length > 0 ? (
+              projectSummaries.map((project) => (
                 <button
                   key={project.id}
                   type="button"
                   className={selectedProjectId === project.id ? 'project-card is-active' : 'project-card'}
                   onClick={() => setSelectedProjectId(project.id)}
                 >
-                  <strong>{project.name}</strong>
-                  <span>{formatDateLabel(project.createdAt)} 생성</span>
+                  <div className="project-card-head">
+                    <strong>{project.name}</strong>
+                    <span>{formatDateLabel(project.recentLogDate)}</span>
+                  </div>
+                  <p>{project.recentLogText}</p>
+                  <small>최근 기록 기준</small>
                 </button>
               ))
             ) : (
@@ -306,18 +335,24 @@ function HomePage() {
                 </div>
               </header>
 
-              <form className="inline-form log-form" onSubmit={handleAddLog}>
-                <input
-                  type="text"
-                  value={logInput}
-                  onChange={(event) => setLogInput(event.target.value)}
-                  placeholder="오늘 한 작업을 적어주세요"
-                  className="text-input"
-                />
-                <button type="submit" className="primary-button">
-                  +
-                </button>
-              </form>
+              <section className="log-composer-card">
+                <div className="log-composer-head">
+                  <strong>오늘 한 작업</strong>
+                  <span>한 줄씩 빠르게 기록할 수 있습니다.</span>
+                </div>
+                <form className="inline-form log-form is-highlighted" onSubmit={handleAddLog}>
+                  <input
+                    type="text"
+                    value={logInput}
+                    onChange={(event) => setLogInput(event.target.value)}
+                    placeholder="오늘 한 작업을 적어주세요"
+                    className="text-input"
+                  />
+                  <button type="submit" className="primary-button">
+                    +
+                  </button>
+                </form>
+              </section>
 
               {errorMessage ? <p className="error-copy">{errorMessage}</p> : null}
 
@@ -325,7 +360,10 @@ function HomePage() {
                 {groupedLogs.length > 0 ? (
                   groupedLogs.map((group) => (
                     <div key={group.dateKey} className="log-group">
-                      <h3>{group.dateLabel}</h3>
+                      <div className="log-group-head">
+                        <h3>{group.dateLabel}</h3>
+                        <span>{group.items.length}개 기록</span>
+                      </div>
                       <ul>
                         {group.items.map((log) => (
                           <li key={log.id} className="log-item">
@@ -355,7 +393,7 @@ function HomePage() {
             <section className="project-placeholder">
               <p className="section-label">프로젝트</p>
               <h1>프로젝트를 선택하세요</h1>
-              <p className="empty-copy">왼쪽에서 프로젝트를 선택하거나 새로 만들어서 작업 로그를 시작할 수 있습니다.</p>
+              <p className="empty-copy">왼쪽 카드에서 프로젝트를 선택하면 진행 기록이 날짜별로 정리되어 보입니다.</p>
             </section>
           )}
         </section>
@@ -364,8 +402,9 @@ function HomePage() {
       {isSaveModalOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setIsSaveModalOpen(false)}>
           <section className="save-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <p className="section-label">기록을 저장할게요</p>
+            <p className="section-label">기록 저장하기</p>
             <h2>아이디를 입력하면 나중에 이어서 볼 수 있어요</h2>
+            <p className="save-modal-copy">지금 작성한 프로젝트와 작업 로그를 이 아이디 기준으로 저장합니다.</p>
             <form className="save-modal-form" onSubmit={handleSaveWorkspace}>
               <input
                 type="text"
@@ -376,7 +415,7 @@ function HomePage() {
               />
               <div className="save-modal-actions">
                 <button type="button" className="secondary-button" onClick={() => setIsSaveModalOpen(false)}>
-                  닫기
+                  취소
                 </button>
                 <button type="submit" className="primary-button wide-button" disabled={isSubmitting}>
                   {isSubmitting ? '저장 중...' : '저장하기'}
